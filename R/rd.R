@@ -49,6 +49,30 @@ rd_df.dfn <- function(rd) {
 }
 
 #' @export
+rd_df.itemize <- function(rd) {
+  is_item_sep <- vapply(
+    rd,
+    function(rdi) identical(attr(rdi, "Rd_tag"), "\\item"),
+    logical(1L)
+  )
+
+  # split into distinct items, only separated by naked \\item tag
+  items <- split(rd[!is_item_sep], cumsum(is_item_sep)[!is_item_sep])
+
+  rd_df(items)
+}
+
+#' @export
+rd_df.item <- function(rd) {
+  if (length(rd) == 1) rd_df(rd[[-1]]) else rd_df(rd[-1])
+}
+
+#' @export
+rd_df.acronym <- function(rd) {
+  rd_tag_df(rd, is_text = TRUE, lintable = FALSE)
+}
+
+#' @export
 rd_df.preformatted <- rd_tag_non_text
 
 #' @export
@@ -80,3 +104,4 @@ rd_df.option <- rd_tag_non_text
 
 #' @export
 rd_df.cite <- rd_tag_non_text
+

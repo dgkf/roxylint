@@ -123,7 +123,6 @@ tag_rd <- function(tag) {
   if (is.null(rd)) return(tag$raw)
   suppressWarnings(tools::parse_Rd(
     textConnection(format(rd)),
-    fragment = TRUE,
     warningCalls = FALSE,
     permissive = TRUE
   ))
@@ -170,4 +169,9 @@ prune_rd <- function(rd, prune) {
   } else {
     rd
   }
+}
+
+#' Borrowed from [`Hmisc`]
+re_escape <- function(x) {
+  gsub("([.|()\\^{}+$*?]|\\[|\\])", "\\\\\\1", x)
 }

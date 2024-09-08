@@ -199,25 +199,68 @@ lint_sentence_case.roxy_tag <- function(x, ...) {
     return()
   }
 
-  lint_sentence_case(lintable_text(x), ...)
+  lint_sentence_case(lintable_text(x), ..., rdf = rdf)
 }
 
 #' @export
-lint_sentence_case.character <- function(x, ...) {
-  words <- strsplit(trimws(x), " ")[[1L]]
-  words <- words[nchar(words) > 0]
+lint_sentence_case.character <- function(x, ..., config = NULL) {
+  allow_list <- c(
+    # standalone 'R', almost certainly meaning the R language
+    "R",
+    # author name proper nouns
+    unlist(config$citations$names),
+    # defined concepts (see below)
+    "{{{concept}}}"
+  )
+
+  # replace concepts with `{{{concept}}}` semphore, allowed above
+  if (!is.null(config$concepts)) {
+    re <- gsub("\\s+", "\\\\s+", re_escape(unlist(config$concepts)))
+    re <- paste0(re, collapse = "|")
+    x <- gsub(re, "{{{concept}}}", x)
+  }
+
+  # filter out clearly non-word words, never throw out a trailing period
+  words <- strsplit(trimws(x), "\\s+")[[1L]]
+  words <- words[grepl("[[:alnum:]]|\\.$", words) & nchar(words) > 0]
 
   # find any first words in sentences (at start, or after full stop)
-  has_stop <- grepl("\\.$", words)
-  is_start <- rep_len(FALSE, length.out = length(words))
+  re_term <- "[.?!]"
+  re_non_term <- paste(collapse = "|", c("al", "e\\.g")) # "et al.", "e.g."
+
+  # determine whether word represents a sentence stop
+  re <- paste0("(?<!^", re_non_term, ")", re_term, "$")
+  has_stop <- grepl(re, words, perl = TRUE)
+
+  is_start <- logical(length(words))
   is_start[[1]] <- TRUE
   is_start[-1] <- has_stop[-length(words)]
 
-  first_cap <- all(grepl("^[^[:lower:]]", words[is_start]))
-  rest_lower <- all(grepl("^[^[:upper:]]", words[!is_start]))
+  # determine which words are in our allow list
+  is_allow <- gsub("'s$", "", words) %in% allow_list
+  firsts_cap <- grepl("^[^[:lower:]]", words[is_start & !is_allow])
+  rests_lower <- grepl("^[^[:upper:]]", words[!is_start & !is_allow])
 
-  if (!(first_cap && rest_lower))
-    message("should be 'Sentence case'")
+  words_to_cap <- words[is_start & !is_allow][!firsts_cap]
+  words_to_low <- words[!is_start & !is_allow][!rests_lower]
+
+  if (!(all(firsts_cap) && all(rests_lower))) {
+    message(paste0(
+      "should be 'Sentence case'.",
+      if (length(words_to_cap) > 0) {
+        paste0(
+          "\n  Should be uppercase: ",
+          paste0("'", words_to_cap, "'", collapse = ", ")
+        )
+      },
+      if (length(words_to_low) > 0) {
+        paste0(
+          "\n  Should be lowercase: ",
+          paste0("'", words_to_low, "'", collapse = ", ")
+        )
+      }
+    ))
+  }
 }
 
 
@@ -267,8 +310,8 @@ lint_title_case.character <- function(x, ...) {
 #'
 #' @export
 tidy_title <- function(x, ...) {
-  lint_sentence_case(x)
-  lint_no_full_stop(x)
+  lint_sentence_case(x, ...)
+  lint_no_full_stop(x, ...)
 }
 
 
@@ -276,9 +319,9 @@ tidy_title <- function(x, ...) {
 #' Tidy 'Sentence case' `@param` definitions
 #'
 #' @export
-tidy_param <- function(x, name, description, ...) {
-  lint_sentence_case(description)
-  lint_full_stop(description)
+tidy_param <- function(x, ...) {
+  lint_sentence_case(x, ...)
+  lint_full_stop(x, ...)
 }
 
 
@@ -287,8 +330,8 @@ tidy_param <- function(x, name, description, ...) {
 #'
 #' @export
 tidy_return <- function(x, ...) {
-  lint_sentence_case(x)
-  lint_full_stop(x)
+  lint_sentence_case(x, ...)
+  lint_full_stop(x, ...)
 }
 
 
@@ -297,8 +340,8 @@ tidy_return <- function(x, ...) {
 #'
 #' @export
 tidy_seealso <- function(x, ...) {
-  lint_sentence_case(x)
-  lint_full_stop(x)
+  lint_sentence_case(x, ...)
+  lint_full_stop(x, ...)
 }
 
 

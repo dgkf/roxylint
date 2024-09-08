@@ -23,6 +23,11 @@ config_load <- function(path = getwd(), cache = TRUE) {
   roxylint <- new.env(parent = baseenv())
   local_config <- config_find_from(path)
 
+  # discover citations
+  if (length(list.files(path, pattern = "^CITATION")) > 0) {
+    roxylint$citations <- config_citations(path)
+  }
+
   # config linters
   for (tag in names(local_config$linters)) {
     add_linters(
@@ -120,4 +125,59 @@ config_from_file <- function(path) {
 
   res <- new.env()
   source(config_files[[1]], local = res)$value
+}
+
+config_citations <- function(path) {
+  UseMethod("config_citations")
+}
+
+#' @export
+config_citations.default <- function(path) {
+  if (file.info(path)$isdir) {
+    config_files <- list.files(
+      path,
+      pattern = "^CITATION",
+      full.names = TRUE,
+      recursive = TRUE
+    )
+
+    return(unlist(recursive = FALSE, lapply(config_files, function(f) {
+      config_citations(f)
+    })))
+  }
+
+  if (nchar(ext <- tools::file_ext(path)) > 0) {
+    class(path) <- c(tolower(ext), class(path))
+    config_citations(path)
+  }
+}
+
+#' @export
+config_citations.cff <- function(path) {
+  if (!requireNamespace("cffr", quietly = TRUE)) {
+    cli::cli_alert_info(
+      "Package {.pkg cffr} is required to use citations to inform lints."
+    )
+    return()
+  }
+
+  derive_citation_data(cffr::cff_read(as.character(path)))
+}
+
+derive_citation_data <- function(x) {
+  data <- list(cff = x)
+
+  # derive proper nouns from authors lists
+  ref_author_names <- function(ref) {
+    lapply(ref$authors, function(author) {
+      author[c("family-names", "given-names")]
+    })
+  }
+
+  data$names <- unique(c(
+    ref_author_names(x),
+    unlist(recursive = FALSE, lapply(x$references, ref_author_names))
+  ))
+
+  data
 }
