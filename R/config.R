@@ -34,7 +34,7 @@ config_load <- function(path = getwd(), cache = TRUE) {
   }
 
   # add non-linter config
-  local_config$lintesr <- NULL
+  local_config$linters <- NULL
   for (n in names(local_config)) {
     roxylint[[n]] <- local_config[[n]]
   }

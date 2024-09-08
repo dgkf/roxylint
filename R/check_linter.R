@@ -1,4 +1,4 @@
-#' Apply 'roxygen2' linters
+#' Apply 'roxygen2' Linters `r # nolint: sentence_case.`
 #'
 #' Provided a list of linters for a given tag, iterate over linters to raise
 #' alerts during the documentation process.
