@@ -5,6 +5,15 @@
 `%||%` <- function(lhs, rhs) if (is.null(lhs)) rhs else lhs
 
 
+vlapply <- function(..., FUN.VALUE = logical(1L)) { # nolint
+  vapply(..., FUN.VALUE = FUN.VALUE)
+}
+
+vcapply <- function(..., FUN.VALUE = character(1L)) { # nolint
+  vapply(..., FUN.VALUE = FUN.VALUE)
+}
+
+
 #' Get that tag!
 #'
 #' Tools for inspecting [roxygen2::roxy_tag()]s. This can be helpful for

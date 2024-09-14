@@ -95,25 +95,15 @@ lint_starts_lowercase.default <- function(x, ...) {
 
 #' @export
 lint_starts_lowercase.roxy_tag <- function(x, ...) {
-  if (is_lint_disabled(x)) return()
-
-  # ignore if first element is not relevant to linter
-  rdf <- rd_df(tag_rd(x))
-  first_non_ws <- Position(identity, !rdf$is_whitespace)
-  if (is.na(first_non_ws) || !isTRUE(rdf[first_non_ws, "lintable"])) {
-    return()
-  }
-
-  lint_starts_lowercase(lintable_text(rdf), ...)
+  lint_starts_lowercase(x$raw, ...)
 }
 
 #' @export
 lint_starts_lowercase.character <- function(x, ...) {
   re <- "^[^[:upper:]]"
-  if (!grepl(re, trimws()))
+  if (!grepl(re, trimws(x)))
     message("should not start with an uppercase letter")
 }
-
 
 #' @describeIn linters
 #' Ends in a full stop. (uses `$raw` for [roxygen2::roxy_tag()]s)
@@ -138,9 +128,9 @@ lint_full_stop.roxy_tag <- function(x, ...) {
 
 #' @export
 lint_full_stop.character <- function(x, ...) {
-  re <- "\\.$"
+  re <- "[.?!]\\s*$"
   if (!grepl(re, trimws(x)))
-    message("should terminate with a full stop, `.`")
+    message("should terminate with a full stop")
 }
 
 
@@ -189,78 +179,67 @@ lint_sentence_case.default <- function(x, ...) {
 }
 
 #' @export
-lint_sentence_case.roxy_tag <- function(x, ...) {
-  if (is_lint_disabled(x$raw)) return()
+lint_sentence_case.roxy_tag <- function(x, ..., config = list()) {
+  allow_list <- c(unlist(config$citations$names), config$concepts)
+  if (is_lint_disabled(x)) return()
 
-  # ignore if first element is not relevant to linter
+  # begin by building a sentence data frame
   rdf <- rd_df(tag_rd(x))
-  first_non_ws <- Position(identity, !rdf$is_whitespace)
-  if (is.na(first_non_ws) || !isTRUE(rdf[first_non_ws, "lintable"])) {
-    return()
-  }
+  rdf <- rd_df_collapse_text(rdf)
+  rgdf <- rd_df_split_full_stops(rdf)
+  rgdf <- lapply(rgdf, rd_df_expand_allow_list, allow_list)
+  rgdf <- lapply(rgdf, rd_df_expand_words)
 
-  lint_sentence_case(lintable_text(x), ..., rdf = rdf)
+  # discover sentences that should be upper-cased
+  upper_re <- "^[[:upper:]]|[^[:alpha:]]"
+  lower_re <- "^[[:lower:]]|[^[:alpha:]]"
+  lints <- unlist(lapply(rgdf, function(sentence_rdf) {
+    # find first non-ws section of sentence
+    first_non_ws <- Position(identity, !sentence_rdf$is_whitespace)
+    if (is.na(first_non_ws)) return()
+
+    # find indices for the rest of the sentence
+    is_case_text <- with(sentence_rdf, is_text & lintable & !is_whitespace)
+    rest <- utils::tail(seq(from = first_non_ws, to = nrow(sentence_rdf)), -1L)
+    rest <- rest[is_case_text[rest]]
+
+    # is text and lintable
+    first_lintable <- all(sentence_rdf[first_non_ws, c("is_text", "lintable")])
+    first_is_upper <- grepl(upper_re, sentence_rdf$content[first_non_ws])
+    is_lower <- grepl(lower_re, sentence_rdf$content[rest])
+
+    c(
+      if (first_lintable & !first_is_upper) sentence_rdf$content[first_non_ws],
+      to_lower = sentence_rdf$content[rest][!is_lower]
+    )
+  }))
+
+  if (length(lints) > 0) {
+    message(paste0(
+      "should be 'Sentence case'.",
+      paste0(
+        "\n  Found improperly cased word(s): ",
+        paste0("'", lints, "'", collapse = ", ")
+      )
+    ))
+  }
 }
 
 #' @export
-lint_sentence_case.character <- function(x, ..., config = NULL) {
-  allow_list <- c(
-    # standalone 'R', almost certainly meaning the R language
-    "R",
-    # author name proper nouns
-    unlist(config$citations$names),
-    # defined concepts (see below)
-    "{{{concept}}}"
-  )
-
-  # replace concepts with `{{{concept}}}` semphore, allowed above
-  if (!is.null(config$concepts)) {
-    re <- gsub("\\s+", "\\\\s+", re_escape(unlist(config$concepts)))
-    re <- paste0(re, collapse = "|")
-    x <- gsub(re, "{{{concept}}}", x)
-  }
-
-  # filter out clearly non-word words, never throw out a trailing period
-  words <- strsplit(trimws(x), "\\s+")[[1L]]
-  words <- words[grepl("[[:alnum:]]|\\.$", words) & nchar(words) > 0]
+lint_sentence_case.character <- function(x, ...) {
+  words <- strsplit(trimws(x), " ")[[1L]]
 
   # find any first words in sentences (at start, or after full stop)
-  re_term <- "[.?!]"
-  re_non_term <- paste(collapse = "|", c("al", "e\\.g")) # "et al.", "e.g."
-
-  # determine whether word represents a sentence stop
-  re <- paste0("(?<!^", re_non_term, ")", re_term, "$")
-  has_stop <- grepl(re, words, perl = TRUE)
-
-  is_start <- logical(length(words))
+  has_stop <- grepl("\\.$", words)
+  is_start <- rep_len(FALSE, length.out = length(words))
   is_start[[1]] <- TRUE
   is_start[-1] <- has_stop[-length(words)]
 
-  # determine which words are in our allow list
-  is_allow <- gsub("'s$", "", words) %in% allow_list
-  firsts_cap <- grepl("^[^[:lower:]]", words[is_start & !is_allow])
-  rests_lower <- grepl("^[^[:upper:]]", words[!is_start & !is_allow])
+  first_cap <- all(grepl("^[^[:lower:]]", words[is_start]))
+  rest_lower <- all(grepl("^[^[:upper:]]", words[!is_start]))
 
-  words_to_cap <- words[is_start & !is_allow][!firsts_cap]
-  words_to_low <- words[!is_start & !is_allow][!rests_lower]
-
-  if (!(all(firsts_cap) && all(rests_lower))) {
-    message(paste0(
-      "should be 'Sentence case'.",
-      if (length(words_to_cap) > 0) {
-        paste0(
-          "\n  Should be uppercase: ",
-          paste0("'", words_to_cap, "'", collapse = ", ")
-        )
-      },
-      if (length(words_to_low) > 0) {
-        paste0(
-          "\n  Should be lowercase: ",
-          paste0("'", words_to_low, "'", collapse = ", ")
-        )
-      }
-    ))
-  }
+  if (!(first_cap && rest_lower))
+    message("should be 'Sentence case'")
 }
 
 
