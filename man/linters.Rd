@@ -30,7 +30,7 @@ lint_title_case(x, ...)
 
 tidy_title(x, ...)
 
-tidy_param(x, name, description, ...)
+tidy_param(x, ...)
 
 tidy_return(x, ...)
 

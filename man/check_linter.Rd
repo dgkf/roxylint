@@ -6,7 +6,7 @@
 \alias{check_linter.list}
 \alias{check_linter.function}
 \alias{check_linter.character}
-\title{Apply 'roxygen2' linters}
+\title{Apply 'roxygen2' Linters}
 \usage{
 check_linter(linters, tag, ...)
 

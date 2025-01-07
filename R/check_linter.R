@@ -1,4 +1,4 @@
-#' Apply 'roxygen2' linters
+#' Apply 'roxygen2' Linters `r # nolint: sentence_case.`
 #'
 #' Provided a list of linters for a given tag, iterate over linters to raise
 #' alerts during the documentation process.
@@ -15,6 +15,8 @@
 #'
 #' @export
 check_linter <- function(linters, tag, ...) {
+  # content was generated automatically with no originating text
+  if (is.null(tag$raw)) return(invisible(TRUE))
   UseMethod("check_linter")
 }
 
@@ -40,7 +42,7 @@ check_linter.list <- function(linters, tag, ...) {
     linter <- linters[[i]]
     message <- names(linters[i])
     message <- if (!is.null(message) && nchar(message) > 0) message else NULL
-    check_linter(linter, tag, message = message)
+    check_linter(linter, tag, message = message, ...)
   }
   invisible(TRUE)
 }
@@ -63,7 +65,9 @@ check_linter.list <- function(linters, tag, ...) {
 #'
 #' @export
 check_linter.function <- function(linters, tag, ...) {
-  into_roxy_alert(tag, do.call(linters, append(list(tag), tag$val)))
+  args <- list(tag, ...)
+  args <- append(args, tag$val)  # append parsed terms from roxy tag
+  into_roxy_alert(tag, do.call(linters, args))
   invisible(TRUE)
 }
 

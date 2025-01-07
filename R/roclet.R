@@ -23,12 +23,17 @@ roxylint <- function() {
 #' @exportS3Method roxygen2::roclet_process roclet_roxylint
 #' @noRd
 roclet_process.roclet_roxylint <- function(x, blocks, env, base_path) {  # nolint
-  config <- config_load()
+  config <- config_load(path = base_path)
 
   for (block in blocks) {
+    # discover @concepts defined in the block & pass to config
+    concepts <- roxygen2::block_get_tags(block, "concept")
+    concepts <- unlist(lapply(concepts, `[[`, "val"))
+    config$concepts <- concepts
+
     for (x in block$tags) {
       linters <- config$linters[[x$tag]]
-      check_linter(linters, x)
+      check_linter(linters, x, config = config)
     }
   }
 
